@@ -675,10 +675,12 @@ class SimulationWorldCanvas {
       }
     ];
 
+    this.orbitLines = [];
     for (const def of planetDefs) {
       // 1. Concentric Glowing Orange Orbit Line (encircles central Sun)
       const orbitLine = this.createConcentricOrbit(def.orbitRadius);
       this.solarSystemGroup.add(orbitLine);
+      this.orbitLines.push(orbitLine);
 
       const initX = def.orbitRadius * Math.cos(def.angle);
       const initZ = def.orbitRadius * Math.sin(def.angle);
@@ -920,6 +922,9 @@ class SimulationWorldCanvas {
       this.focusEarth();
     } else {
       this.viewMode = 'solar';
+      if (this.solarSystemGroup) {
+        this.solarSystemGroup.visible = true;
+      }
       const btn = document.getElementById('btn-toggle-solar-mode');
       if (btn) {
         btn.innerHTML = '🌍 पृथ्वी फोकस';
@@ -931,6 +936,9 @@ class SimulationWorldCanvas {
 
   focusEarth() {
     this.viewMode = 'earth';
+    if (this.solarSystemGroup) {
+      this.solarSystemGroup.visible = false;
+    }
     this.targetRotationX = 0.2;
     this.targetRotationY = 0;
     this.targetCameraDistance = 240;
@@ -1329,6 +1337,9 @@ class SimulationWorldCanvas {
 
     if (this.isGlobeMode) {
       this.viewMode = 'earth';
+      if (this.solarSystemGroup) {
+        this.solarSystemGroup.visible = false;
+      }
       // Mathematically rotates the globe so the chosen lat/lng directly centers in the viewport on land
       const { rx, ry } = getFocusEuler(loc.lat, loc.lng);
       this.targetRotationX = rx;
@@ -1875,6 +1886,25 @@ class SimulationWorldCanvas {
     }
 
     if (isSolar) {
+      if (this.solarSystemGroup) {
+        this.solarSystemGroup.visible = true;
+      }
+      const isZoomedEarth = this.solarCameraDist < 850;
+      if (this.orbitLines) {
+        for (const line of this.orbitLines) {
+          line.visible = !isZoomedEarth;
+        }
+      }
+      if (this.planets) {
+        for (const p of this.planets) {
+          if (p.label) p.label.visible = !isZoomedEarth;
+          if (p.group && !p.isEarth) p.group.visible = !isZoomedEarth;
+        }
+      }
+      if (this.sunGroup) {
+        this.sunGroup.visible = !isZoomedEarth;
+      }
+
       // 1. SOLAR SYSTEM VIEW: Real-world Heliocentric Model matching reference diagram
       const solarSpeed = Math.max(0.1, this.solarSpeedMultiplier || 1.0);
 
@@ -1930,6 +1960,10 @@ class SimulationWorldCanvas {
       }
     } else {
       // 2. EARTH SIMULATION VIEW: Focus on Earth, cities, and living agents
+      if (this.solarSystemGroup) {
+        this.solarSystemGroup.visible = false;
+      }
+
       if (this.autoRotate && !this.isDragging) {
         this.targetRotationY += 0.0016;
       }

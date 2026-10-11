@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const { DatabaseSync } = require('node:sqlite');
 const config = require('../config');
+const { seedAgents, seedCouples, seedChildRelations } = require('./seed-data');
 
 // Ensure data folder exists (safe for serverless and read-only filesystems)
 try {
@@ -118,344 +119,127 @@ function initSchema(db) {
 }
 
 function seedInitialData(db) {
-  // 1. Simulation settings check
+  const now = new Date().toISOString();
+
+  // 1. Simulation settings check (ensure reproduction enabled & high max_population)
   const settingsCheck = db.prepare('SELECT COUNT(*) as count FROM simulation_settings').get();
   if (settingsCheck.count === 0) {
     db.prepare(`
-      INSERT INTO simulation_settings (id, tick_rate_ms, is_running, ai_decision_interval, gemini_enabled, world_time, weather, updated_at)
-      VALUES (1, ?, 1, 2, 0, '09:00 AM (Day 1)', 'Sunny', ?)
-    `).run(config.TICK_INTERVAL_DEFAULT_MS, new Date().toISOString());
+      INSERT INTO simulation_settings (id, tick_rate_ms, is_running, ai_decision_interval, gemini_enabled, world_time, weather, updated_at, reproduction_enabled, max_population)
+      VALUES (1, ?, 1, 2, 0, '09:00 AM (Day 1)', 'Sunny', ?, 1, 2500)
+    `).run(config.TICK_INTERVAL_DEFAULT_MS, now);
+  } else {
+    try {
+      db.prepare(`
+        UPDATE simulation_settings
+        SET max_population = 2500, reproduction_enabled = 1
+        WHERE id = 1
+      `).run();
+    } catch (e) {}
   }
 
-  // 2. Agents seed check
-  const agentCheck = db.prepare('SELECT COUNT(*) as count FROM agents').get();
-  if (agentCheck.count === 0) {
-    const seedAgents = [
-      {
-        name: 'Dr. Evelyn Reed',
-        avatar: '👩‍🔬',
-        photo_url: '/assets/portraits/evelyn.jpg',
-        age: 34,
-        date_of_birth: '1992-05-14',
-        health: 98.0,
-        stress: 15.0,
-        emotion: 'curious',
-        family_background: 'Eldest daughter of academic family from North Harbor',
-        financial_status: 'Comfortable (Senior Research Grant)',
-        life_history: 'Pioneered renewable quantum thermodynamics in Town and leads the Grand Library archives.',
-        occupation: 'Quantum Physicist',
-        location: 'Grand Library',
-        activity: 'working',
-        runtime_status: 'active',
-        personality: 'Analytical, inquisitive, deeply ethical',
-        current_goal: 'Formulate mathematical model for energy conservation',
-        hunger: 80.0,
-        energy: 85.0,
-        happiness: 90.0,
-        social_needs: 65.0,
-        virtual_balance: 320.0,
-        reward_points: 25.0,
-        last_decision_reason: 'Needed quiet contemplation, arrived at Grand Library archive.',
-        belief: 'Unsure or undecided',
-        beliefSource: 'Autonomous Philosophical Discourse with Dr. Vance',
-        x_coord: 420.0,
-        y_coord: 180.0
-      },
-      {
-        name: 'Marcus Vance',
-        avatar: '👨‍💼',
-        photo_url: '/assets/portraits/marcus.jpg',
-        age: 42,
-        date_of_birth: '1984-08-22',
-        health: 92.0,
-        stress: 28.0,
-        emotion: 'hopeful',
-        family_background: 'Father of two, married, long-time community organizer',
-        financial_status: 'Upper Middle Class (Architect)',
-        life_history: 'Designed civic infrastructure and Town Square solar pavilion.',
-        occupation: 'Community Architect',
-        location: 'Town Square',
-        activity: 'socializing',
-        runtime_status: 'active',
-        personality: 'Outgoing, visionary, collaborative',
-        current_goal: 'Gather civic opinions on new solar greenhouse canopy',
-        hunger: 72.0,
-        energy: 60.0,
-        happiness: 85.0,
-        social_needs: 80.0,
-        virtual_balance: 240.0,
-        reward_points: 40.0,
-        last_decision_reason: 'Recognized fellow citizens gathering in Town Square; initiated conversation.',
-        belief: 'Trusts in God',
-        beliefSource: 'Personal Simulated Life Experience and Reflection',
-        x_coord: 250.0,
-        y_coord: 260.0
-      },
-      {
-        name: 'Aria Thorne',
-        avatar: '🎨',
-        photo_url: '/assets/portraits/aria.jpg',
-        age: 27,
-        date_of_birth: '1999-11-03',
-        health: 95.0,
-        stress: 18.0,
-        emotion: 'inspired',
-        family_background: 'Second generation artist born to visiting botanists',
-        financial_status: 'Modest / Freelance',
-        life_history: 'Exhibits biomimetic sculptures and park installations in Central Park.',
-        occupation: 'Digital Sculptor',
-        location: 'Central Park',
-        activity: 'resting',
-        runtime_status: 'active',
-        personality: 'Creative, contemplative, free-spirited',
-        current_goal: 'Sketch generative biomimetic structures under willow trees',
-        hunger: 65.0,
-        energy: 78.0,
-        happiness: 95.0,
-        social_needs: 45.0,
-        virtual_balance: 180.0,
-        reward_points: 15.0,
-        last_decision_reason: 'Sunny weather prompted outdoor creative reflection in Central Park.',
-        belief: 'Belief not specified',
-        beliefSource: 'Initial Simulation Registration',
-        x_coord: 580.0,
-        y_coord: 320.0
-      },
-      {
-        name: 'Kaito Tanaka',
-        avatar: '☕',
-        photo_url: '/assets/portraits/kaito.jpg',
-        age: 38,
-        date_of_birth: '1988-02-19',
-        health: 96.0,
-        stress: 12.0,
-        emotion: 'content',
-        family_background: 'Raised in traditional tea-merchant lineage',
-        financial_status: 'Stable Business Owner',
-        life_history: 'Brews artisanal coffees and documents oral town histories at Sunny Cafe.',
-        occupation: 'Master Barista & Historian',
-        location: 'Sunny Cafe',
-        activity: 'working',
-        runtime_status: 'active',
-        personality: 'Warm, hospitable, observant',
-        current_goal: 'Brew artisanal blends and converse with weary morning commuters',
-        hunger: 90.0,
-        energy: 70.0,
-        happiness: 88.0,
-        social_needs: 85.0,
-        virtual_balance: 290.0,
-        reward_points: 30.0,
-        last_decision_reason: 'Prepared morning roasting cycle at Sunny Cafe.',
-        belief: 'Does not trust in God',
-        beliefSource: 'Autonomous Philosophical Discourse with Dr. Reed',
-        x_coord: 180.0,
-        y_coord: 390.0
-      },
-      {
-        name: 'Elena Rostova',
-        avatar: '💻',
-        photo_url: '/assets/portraits/elena.jpg',
-        age: 29,
-        date_of_birth: '1997-06-30',
-        health: 97.0,
-        stress: 22.0,
-        emotion: 'focused',
-        family_background: 'Daughter of aerospace engineers',
-        financial_status: 'High Income (Lead Engineer)',
-        life_history: 'Oversees town automated power grid and grid resiliency.',
-        occupation: 'Systems Engineer',
-        location: 'Workplace (Tech Hub)',
-        activity: 'working',
-        runtime_status: 'active',
-        personality: 'Methodical, perfectionist, focused',
-        current_goal: 'Debug simulation telemetric grid optimization loop',
-        hunger: 55.0,
-        energy: 45.0,
-        happiness: 72.0,
-        social_needs: 40.0,
-        virtual_balance: 410.0,
-        reward_points: 50.0,
-        last_decision_reason: 'Focused on resolving high-priority algorithmic backlog item.',
-        belief: 'Does not trust in God',
-        beliefSource: 'Autonomous Reasoning and Life Reflection',
-        x_coord: 720.0,
-        y_coord: 150.0
-      },
-      {
-        name: 'Julian Hayes',
-        avatar: '🌿',
-        photo_url: '/assets/portraits/julian.jpg',
-        age: 31,
-        date_of_birth: '1995-09-11',
-        health: 94.0,
-        stress: 14.0,
-        emotion: 'peaceful',
-        family_background: 'Farming family origins from eastern valley',
-        financial_status: 'Comfortable (Master Horticulturist)',
-        life_history: 'Cultivates town rooftop farms and botanical reserves.',
-        occupation: 'Urban Ecologist',
-        location: 'Residential Complex',
-        activity: 'sleeping',
-        runtime_status: 'active', // Active in sim, but currently sleeping!
-        personality: 'Patient, calm, nature-aligned',
-        current_goal: 'Recharge sleep cycles before morning soil sampling',
-        hunger: 70.0,
-        energy: 18.0,
-        happiness: 68.0,
-        social_needs: 50.0,
-        virtual_balance: 195.0,
-        reward_points: 10.0,
-        last_decision_reason: 'Energy dipped below critical threshold (18%); retreated home to sleep.',
-        belief: 'Trusts in God',
-        beliefSource: 'Personal Simulated Life Experience',
-        x_coord: 120.0,
-        y_coord: 140.0
-      },
-      {
-        name: 'Sora Williams',
-        avatar: '🏥',
-        photo_url: '/assets/portraits/sora.jpg',
-        age: 33,
-        date_of_birth: '1993-01-25',
-        health: 96.0,
-        stress: 24.0,
-        emotion: 'empathetic',
-        family_background: 'Single, close ties with healthcare collective',
-        financial_status: 'Stable (Medical Researcher)',
-        life_history: 'Coordinates preventive healthcare clinic for all citizens.',
-        occupation: 'Biomedical Researcher',
-        location: 'Wellness Clinic',
-        activity: 'working',
-        runtime_status: 'active',
-        personality: 'Empathetic, cautious, diligent',
-        current_goal: 'Calibrate metabolic scanners for community wellness',
-        hunger: 82.0,
-        energy: 65.0,
-        happiness: 80.0,
-        social_needs: 60.0,
-        virtual_balance: 275.0,
-        reward_points: 20.0,
-        last_decision_reason: 'Scheduled clinic duty hours began at Wellness Clinic.',
-        belief: 'Unsure or undecided',
-        beliefSource: 'Autonomous Philosophical Discourse',
-        x_coord: 680.0,
-        y_coord: 440.0
-      },
-      {
-        name: 'Tariq Al-Mansoor',
-        avatar: '📚',
-        photo_url: '/assets/portraits/tariq.jpg',
-        age: 67,
-        date_of_birth: '1959-10-18',
-        health: 82.0,
-        stress: 20.0,
-        emotion: 'reflective',
-        family_background: 'Widower, respected grandfather and scholar',
-        financial_status: 'Pension & Savings',
-        life_history: 'Emeritus Professor of Ethics, author of 4 foundational treatises.',
-        occupation: 'Ethics Professor',
-        location: 'Grand Library',
-        activity: 'walking',
-        runtime_status: 'paused', // Paused administratively for inspection
-        personality: 'Erudite, principled, oratorical',
-        current_goal: 'Prepare symposium lecture on AI civic consciousness',
-        hunger: 75.0,
-        energy: 55.0,
-        happiness: 76.0,
-        social_needs: 62.0,
-        virtual_balance: 310.0,
-        reward_points: 15.0,
-        last_decision_reason: 'Walking between archive shelves examining ancient codices.',
-        belief: 'Trusts in God',
-        beliefSource: 'Autonomous Reflection and Scholarly Examination',
-        x_coord: 460.0,
-        y_coord: 210.0
-      },
-      {
-        name: 'Nadia Chen',
-        avatar: '🛠️',
-        photo_url: '/assets/portraits/nadia.jpg',
-        age: 26,
-        date_of_birth: '2000-03-08',
-        health: 90.0,
-        stress: 35.0,
-        emotion: 'restless',
-        family_background: 'Youngest of four siblings from industrial district',
-        financial_status: 'Modest Savings',
-        life_history: 'Maintains automated drone fleet and civic transit robots.',
-        occupation: 'Robotics Technician',
-        location: 'Workplace (Tech Hub)',
-        activity: 'resting',
-        runtime_status: 'deactivated', // Administratively deactivated
-        personality: 'Bold, inventive, restless',
-        current_goal: 'Archived unit awaiting administrative reactivation protocol',
-        hunger: 50.0,
-        energy: 50.0,
-        happiness: 50.0,
-        social_needs: 50.0,
-        virtual_balance: 120.0,
-        reward_points: 5.0,
-        last_decision_reason: 'Deactivated by administrative authority for maintenance.',
-        belief: 'Belief not specified',
-        beliefSource: 'Initial Simulation Registration',
-        x_coord: 750.0,
-        y_coord: 200.0
-      }
-    ];
+  // 2. Agents seed check (Ensure 50+ diverse global citizens across all 10 hubs)
+  const existingAgents = db.prepare('SELECT id, name FROM agents').all();
+  const existingNameMap = new Map(existingAgents.map(a => [a.name, a.id]));
 
-    const insertAgent = db.prepare(`
-      INSERT INTO agents (
-        name, avatar, photo_url, age, date_of_birth, health, stress, emotion,
-        family_background, financial_status, life_history,
-        occupation, location, activity, runtime_status,
-        personality, current_goal, hunger, energy, happiness, social_needs,
-        virtual_balance, reward_points, last_decision_reason, last_decision_time,
-        x_coord, y_coord, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
+  const insertAgent = db.prepare(`
+    INSERT INTO agents (
+      name, avatar, photo_url, age, date_of_birth, health, stress, emotion,
+      family_background, financial_status, life_history,
+      occupation, location, preferred_city, choice_reason, activity, runtime_status,
+      personality, current_goal, hunger, energy, happiness, social_needs,
+      virtual_balance, reward_points, last_decision_reason, last_decision_time,
+      x_coord, y_coord, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
 
-    const insertBelief = db.prepare(`
-      INSERT INTO agent_belief_profiles (agent_id, belief_status, declared_source, notes, updated_at)
-      VALUES (?, ?, ?, ?, ?)
-    `);
+  const insertBelief = db.prepare(`
+    INSERT INTO agent_belief_profiles (agent_id, belief_status, declared_source, notes, updated_at)
+    VALUES (?, ?, ?, ?, ?)
+  `);
 
-    const insertMemory = db.prepare(`
-      INSERT INTO agent_memories (agent_id, memory_text, emotional_valence, privacy_level, timestamp)
-      VALUES (?, ?, ?, ?, ?)
-    `);
+  const insertMemory = db.prepare(`
+    INSERT INTO agent_memories (agent_id, memory_text, emotional_valence, privacy_level, timestamp)
+    VALUES (?, ?, ?, ?, ?)
+  `);
 
-    const now = new Date().toISOString();
+  const isTest = process.env.NODE_ENV === 'test';
+  const targetAgents = isTest ? seedAgents.slice(0, 9) : seedAgents;
 
-    for (const a of seedAgents) {
-      const res = insertAgent.run(
-        a.name, a.avatar, a.photo_url, a.age, a.date_of_birth, a.health, a.stress, a.emotion,
-        a.family_background, a.financial_status, a.life_history,
-        a.occupation, a.location, a.activity, a.runtime_status,
-        a.personality, a.current_goal, a.hunger, a.energy, a.happiness, a.social_needs,
-        a.virtual_balance, a.reward_points, a.last_decision_reason, now,
-        a.x_coord, a.y_coord, now, now
-      );
-      const agentId = res.lastInsertRowid;
+  for (const a of targetAgents) {
+    if (existingNameMap.has(a.name)) continue;
 
-      // Belief profile stored separately
-      insertBelief.run(agentId, a.belief, a.beliefSource, 'Recorded in simulation timeline', now);
+    const res = insertAgent.run(
+      a.name, a.avatar, a.photo_url, a.age, a.date_of_birth, a.health, a.stress, a.emotion,
+      a.family_background, a.financial_status, a.life_history,
+      a.occupation, a.location, a.preferred_city || a.location, a.choice_reason || 'Lives happily in this location.', a.activity, a.runtime_status || 'active',
+      a.personality, a.current_goal, a.hunger, a.energy, a.happiness, a.social_needs,
+      a.virtual_balance, a.reward_points, a.last_decision_reason, now,
+      a.x_coord, a.y_coord, now, now
+    );
+    const agentId = res.lastInsertRowid;
+    existingNameMap.set(a.name, agentId);
 
-      // Seed memories
-      insertMemory.run(agentId, `Joined the Autonomous Human Simulation as ${a.occupation}.`, 0.8, 'public', now);
+    // Belief profile
+    try {
+      insertBelief.run(agentId, a.belief || 'Belief not specified', a.beliefSource || 'Initial Simulation Registration', 'Recorded in simulation timeline', now);
+    } catch (e) {}
+
+    // Seed memories
+    try {
+      insertMemory.run(agentId, `Joined the Global Autonomous Simulation as ${a.occupation} in ${a.preferred_city || a.location}.`, 0.8, 'public', now);
       insertMemory.run(agentId, `Formulated personal goal: "${a.current_goal}".`, 0.5, 'private', now);
+    } catch (e) {}
+  }
+
+  // 3. Established couples for autonomous reproduction
+  const insertRel = db.prepare(`
+    INSERT INTO agent_relationships (agent_a_id, agent_b_id, relationship_type, affinity_score, trust_score, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `);
+
+  for (const c of seedCouples) {
+    const idA = existingNameMap.get(c.a);
+    const idB = existingNameMap.get(c.b);
+    if (idA && idB) {
+      const existingRel = db.prepare(`
+        SELECT id FROM agent_relationships
+        WHERE (agent_a_id = ? AND agent_b_id = ?) OR (agent_a_id = ? AND agent_b_id = ?)
+      `).get(idA, idB, idB, idA);
+      if (!existingRel) {
+        try {
+          insertRel.run(idA, idB, c.type, c.affinity, c.affinity, now);
+        } catch (e) {}
+      }
     }
+  }
 
-    // Seed relationship between Evelyn and Marcus
-    db.prepare(`
-      INSERT INTO agent_relationships (agent_a_id, agent_b_id, relationship_type, affinity_score, trust_score, updated_at)
-      VALUES (1, 2, 'Collaborator', 82.0, 78.0, ?)
-    `).run(now);
+  // 4. Set parent links for children
+  for (const cr of seedChildRelations) {
+    const childId = existingNameMap.get(cr.child);
+    const parentAId = existingNameMap.get(cr.parents[0]);
+    const parentBId = existingNameMap.get(cr.parents[1]);
+    if (childId && parentAId && parentBId) {
+      try {
+        db.prepare('UPDATE agents SET parent_a_id = ?, parent_b_id = ?, generation = 2 WHERE id = ?')
+          .run(parentAId, parentBId, childId);
+      } catch (e) {}
+    }
+  }
 
-    // Seed conversation
-    db.prepare(`
-      INSERT INTO agent_conversations (agent_a_id, agent_b_id, topic, snippet, location, timestamp)
-      VALUES (1, 2, 'Renewable Urban Canopy', 'Evelyn reviewed Marcus’s structural tension equations with excitement.', 'Town Square', ?)
-    `).run(now);
+  // 5. Seed initial conversation if none exists
+  const convCount = db.prepare('SELECT COUNT(*) as count FROM agent_conversations').get().count;
+  if (convCount === 0) {
+    const evId = existingNameMap.get('Dr. Evelyn Reed');
+    const marId = existingNameMap.get('Marcus Vance');
+    if (evId && marId) {
+      try {
+        db.prepare(`
+          INSERT INTO agent_conversations (agent_a_id, agent_b_id, topic, snippet, location, timestamp)
+          VALUES (?, ?, 'Renewable Urban Canopy', 'Evelyn reviewed Marcus’s structural tension equations with excitement.', 'Town Square', ?)
+        `).run(evId, marId, now);
+      } catch (e) {}
+    }
   }
 
   // 3. Reward rules seed check
