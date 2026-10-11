@@ -44,6 +44,9 @@ class SimulationEngine {
     this.timer = setInterval(() => {
       this.tick().catch(err => console.error('Simulation tick error:', err));
     }, intervalMs);
+    if (this.timer && typeof this.timer.unref === 'function') {
+      this.timer.unref();
+    }
 
     const db = getDatabase();
     db.prepare('UPDATE simulation_settings SET is_running = 1, tick_rate_ms = ?, updated_at = ? WHERE id = 1')

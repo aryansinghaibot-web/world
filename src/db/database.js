@@ -3,10 +3,14 @@ const path = require('path');
 const { DatabaseSync } = require('node:sqlite');
 const config = require('../config');
 
-// Ensure data folder exists
-const dataDir = path.dirname(config.DB_PATH);
-if (!fs.existsSync(dataDir)) {
-  fs.mkdirSync(dataDir, { recursive: true });
+// Ensure data folder exists (safe for serverless and read-only filesystems)
+try {
+  const dataDir = path.dirname(config.DB_PATH);
+  if (!fs.existsSync(dataDir)) {
+    fs.mkdirSync(dataDir, { recursive: true });
+  }
+} catch (err) {
+  console.warn('dataDir creation notice:', err.message);
 }
 
 let dbInstance = null;
@@ -17,9 +21,9 @@ function getDatabase() {
   dbInstance = new DatabaseSync(config.DB_PATH);
   
   // Enable foreign keys, WAL mode, and busy timeout for concurrent safety
-  dbInstance.exec('PRAGMA foreign_keys = ON;');
-  dbInstance.exec('PRAGMA journal_mode = WAL;');
-  dbInstance.exec('PRAGMA busy_timeout = 5000;');
+  try { dbInstance.exec('PRAGMA foreign_keys = ON;'); } catch (e) {}
+  try { dbInstance.exec('PRAGMA journal_mode = WAL;'); } catch (e) {}
+  try { dbInstance.exec('PRAGMA busy_timeout = 5000;'); } catch (e) {}
 
   initSchema(dbInstance);
   seedInitialData(dbInstance);
@@ -28,9 +32,23 @@ function getDatabase() {
 }
 
 function initSchema(db) {
-  const schemaPath = path.join(__dirname, 'schema.sql');
-  const schemaSql = fs.readFileSync(schemaPath, 'utf8');
-  db.exec(schemaSql);
+  let schemaSql = '';
+  const candidatePaths = [
+    path.join(__dirname, 'schema.sql'),
+    path.join(process.cwd(), 'src', 'db', 'schema.sql'),
+    path.join(process.cwd(), 'schema.sql')
+  ];
+
+  for (const p of candidatePaths) {
+    if (fs.existsSync(p)) {
+      schemaSql = fs.readFileSync(p, 'utf8');
+      break;
+    }
+  }
+
+  if (schemaSql) {
+    db.exec(schemaSql);
+  }
 
   // Safe schema migrations for realistic agents and lifecycles
   try { db.exec('ALTER TABLE agents ADD COLUMN generation INTEGER DEFAULT 1;'); } catch (e) {}
