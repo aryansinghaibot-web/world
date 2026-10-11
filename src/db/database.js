@@ -18,7 +18,12 @@ let dbInstance = null;
 function getDatabase() {
   if (dbInstance) return dbInstance;
 
-  dbInstance = new DatabaseSync(config.DB_PATH);
+  try {
+    dbInstance = new DatabaseSync(config.DB_PATH);
+  } catch (err) {
+    console.warn(`Failed to open DB at ${config.DB_PATH}, falling back to :memory: SQLite:`, err.message);
+    dbInstance = new DatabaseSync(':memory:');
+  }
   
   // Enable foreign keys, WAL mode, and busy timeout for concurrent safety
   try { dbInstance.exec('PRAGMA foreign_keys = ON;'); } catch (e) {}

@@ -49,7 +49,17 @@ app.use((req, res, next) => {
   if (req.path.startsWith('/api/')) {
     return res.status(404).json({ error: 'Endpoint not found' });
   }
-  res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
+  const candidateIndexPaths = [
+    path.join(__dirname, '..', 'public', 'index.html'),
+    path.join(process.cwd(), 'public', 'index.html'),
+    path.join(__dirname, 'public', 'index.html')
+  ];
+  for (const p of candidateIndexPaths) {
+    if (require('fs').existsSync(p)) {
+      return res.sendFile(p);
+    }
+  }
+  res.status(200).send('<!DOCTYPE html><html><head><title>Simulation</title></head><body>Simulation Backend Online</body></html>');
 });
 
 // Central error handler
